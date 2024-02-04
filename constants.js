@@ -1,10 +1,3 @@
-const ADMINS = {
-    /*"Pavel": 972097851,*/
-    Olga: 942434545,
-};
-
-const USERS = [6252764612, 972097851, 942434545, 5368804602];
-
 const ORDER_END_HOUR = 20;
 const ORDER_START_HOUR = 15;
 
@@ -35,8 +28,6 @@ const orderTypes = {
 };
 
 module.exports = {
-    ADMINS,
-    USERS,
     ORDER_END_HOUR,
     ORDER_START_HOUR,
     daysMap,

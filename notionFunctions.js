@@ -18,7 +18,7 @@ const queryDatabase = async (databaseId, propertyName, propertyValue) => {
                 },
             },
         });
-        return response.results[0].id;
+        return response.results[0]?.id ?? null;
     } catch (error) {
         console.error('Ошибка при запросе данных в Notion:', error);
     }
@@ -116,6 +116,32 @@ const getOrdersCount = async (dataBaseId, menuWeekDay) => {
     });
 
     return resultMessage;
+};
+
+const getDataUsers = async (databaseId) => {
+    const validUsers = [];
+    const admins = [];
+
+    const res = await notion.databases.query({
+        database_id: databaseId,
+    });
+
+    res.results.forEach((page) => {
+        validUsers.push(
+            Number(page.properties['telegram_id'].rich_text[0].plain_text)
+        );
+
+        if (page.properties['isAdmin'].rich_text[0]?.plain_text === 'true') {
+            admins.push(
+                Number(page.properties['telegram_id'].rich_text[0].plain_text)
+            );
+        }
+    });
+
+    return {
+        validUsers,
+        admins,
+    };
 };
 
 const updateOrderInNotion = async (databaseId, fromId, orderType, weekDay) => {
@@ -220,5 +246,6 @@ module.exports = {
     updateOrderInNotion,
     getOrdersInNotion,
     getOrdersCount,
+    getDataUsers,
     clearDatabaseInNotion,
 };

@@ -6,6 +6,7 @@ const {
     getStartButtons,
     getOrderButtons,
     getEndOfDayButtons,
+    getNotValidUserButtons,
     getCurrentHours,
     getWeekDays,
     getUploadMenuButtons,
@@ -18,25 +19,34 @@ const {
     daysMap,
     rusWeekDays,
     orderTypes,
-    ADMINS,
-    USERS,
 } = require('./constants');
 const {
     updateMenuInNotion,
     createMenuInNotion,
     getOrdersCount,
+    getDataUsers,
     getMenuInNotion,
     clearDatabaseInNotion,
 } = require('./notionFunctions');
 
 const menuDatabaseId = process.env.NOTION_MENU_DATABASE_ID;
 const ordersDatabaseId = process.env.NOTION_ORDERS_DATABASE_ID;
+const usersDatabaseId = process.env.NOTION_USERS_DATABASE_ID;
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
 
 const bot = new TelegramBot(telegramBotToken, { polling: true });
 
 let currentAdminCommand = null;
 let currentDay = null;
+let validUsers = [];
+let admins = [];
+
+(async () => {
+    const res = await getDataUsers(usersDatabaseId);
+
+    validUsers = res.validUsers;
+    admins = res.admins;
+})();
 
 bot.on('callback_query', (callbackQuery) => {
     const data = callbackQuery.data;
@@ -45,7 +55,7 @@ bot.on('callback_query', (callbackQuery) => {
 
     switch (data) {
         case 'upload_menu': {
-            if (isAdmin(fromId)) {
+            if (isAdmin(fromId, admins)) {
                 getMenuInNotion(menuDatabaseId).then((res) => {
                     const menu =
                         res?.properties[daysMap['1']].rich_text[0]
@@ -55,7 +65,7 @@ bot.on('callback_query', (callbackQuery) => {
                         bot.sendMessage(
                             chatId,
                             'Кажется меню на неделю уже загружено. Если хочешь заменить меню в какой-либо день, выбери пожалуйста',
-                            getChangeDayMenuButtons(fromId)
+                            getChangeDayMenuButtons(fromId, admins)
                         );
                     } else {
                         currentAdminCommand = { type: 'UPLOAD_MENU' };
@@ -92,7 +102,7 @@ bot.on('callback_query', (callbackQuery) => {
             bot.sendMessage(
                 chatId,
                 'Привет я бот заказа обедов компании Kite Group! Выбери действие:',
-                getStartButtons(fromId)
+                getStartButtons(fromId, admins)
             );
             break;
         }
@@ -107,7 +117,7 @@ bot.on('callback_query', (callbackQuery) => {
                 bot.sendMessage(
                     chatId,
                     `Извини, но сегодня заказы не предусмотрены. Ждем тебя ориентировочно после ${ORDER_START_HOUR}:00 в воскресенье! Когда меню появится, тебе придет напоминалка!`,
-                    getStartButtons(fromId)
+                    getStartButtons(fromId, admins)
                 );
                 break;
             }
@@ -137,7 +147,7 @@ bot.on('callback_query', (callbackQuery) => {
                     bot.sendMessage(
                         chatId,
                         `Меню еще не загружено. Скоро тебе придет уведомления о появлении меню, ориентировочно после ${ORDER_START_HOUR}:00 в воскресенье!`,
-                        getStartButtons(chatId)
+                        getStartButtons(chatId, admins)
                     );
                 }
             });
@@ -155,7 +165,7 @@ bot.on('callback_query', (callbackQuery) => {
                 bot.sendMessage(
                     chatId,
                     `Извини, но сегодня сбор заказов не предусмотрен. Ждем тебя после ${ORDER_END_HOUR}:00 в воскресенье!`,
-                    getStartButtons(fromId)
+                    getStartButtons(fromId, admins)
                 );
                 break;
             } else if (currentHours < ORDER_END_HOUR) {
@@ -170,7 +180,7 @@ bot.on('callback_query', (callbackQuery) => {
                     bot.sendMessage(
                         chatId,
                         `Заказы на ${rusWeekDays[menuWeekDay]}\n${res}`,
-                        getStartButtons(fromId)
+                        getStartButtons(fromId, admins)
                     );
                 });
                 break;
@@ -227,6 +237,7 @@ bot.on('callback_query', (callbackQuery) => {
                 orderType: orderTypes.standardOne,
                 databaseId: ordersDatabaseId,
                 fromId,
+                admins,
                 chatId,
                 bot,
             });
@@ -238,6 +249,7 @@ bot.on('callback_query', (callbackQuery) => {
                 orderType: orderTypes.standardTwo,
                 databaseId: ordersDatabaseId,
                 fromId,
+                admins,
                 chatId,
                 bot,
             });
@@ -249,6 +261,7 @@ bot.on('callback_query', (callbackQuery) => {
                 orderType: orderTypes.standardVIP,
                 databaseId: ordersDatabaseId,
                 fromId,
+                admins,
                 chatId,
                 bot,
             });
@@ -263,11 +276,11 @@ bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     const fromId = msg.from.id;
 
-    if (!USERS.includes(fromId)) {
+    if (!validUsers.includes(fromId)) {
         bot.sendMessage(
             chatId,
             'Извини, но у тебя нет доступа к этому боту. Если ты хочешь заказывать обеды в компании Kite Group, обратись к администратору бота.',
-            getEndOfDayButtons()
+            getNotValidUserButtons()
         );
         return;
     }
@@ -275,7 +288,7 @@ bot.onText(/\/start/, (msg) => {
     bot.sendMessage(
         chatId,
         'Привет я бот заказа обедов компании Kite Group! Выбери действие:',
-        getStartButtons(fromId)
+        getStartButtons(fromId, admins)
     );
 });
 
@@ -298,11 +311,11 @@ bot.on('message', (msg) => {
         const chatId = msg.chat.id;
         const fromId = msg.from.id;
 
-        if (!USERS.includes(fromId)) {
+        if (!validUsers.includes(fromId)) {
             bot.sendMessage(
                 chatId,
                 'Извини, но у тебя нет доступа к этому боту. Если ты хочешь заказывать обеды в компании Kite Group, обратись к администратору бота.',
-                getEndOfDayButtons()
+                getNotValidUserButtons()
             );
             return;
         }
@@ -310,7 +323,7 @@ bot.on('message', (msg) => {
         bot.sendMessage(
             chatId,
             'Привет я бот заказа обедов компании Kite Group! Выбери действие:',
-            getStartButtons(fromId)
+            getStartButtons(fromId, admins)
         );
     }
 });
@@ -321,11 +334,15 @@ bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const fromId = msg.from.id;
 
-    if (isAdmin(fromId)) {
+    if (isAdmin(fromId, admins)) {
         if (currentAdminCommand.type === 'UPDATE_MENU') {
             const { day } = currentAdminCommand;
             await updateMenuInNotion(menuDatabaseId, msg.text, day);
-            bot.sendMessage(chatId, `Меню обновлено`, getStartButtons(fromId));
+            bot.sendMessage(
+                chatId,
+                `Меню обновлено`,
+                getStartButtons(fromId, admins)
+            );
             currentAdminCommand = null;
             return;
         }
@@ -376,14 +393,12 @@ bot.on('message', async (msg) => {
                 currentDay = null;
                 currentAdminCommand = null;
 
-                for (const chatId of USERS) {
+                for (const chatId of validUsers) {
                     bot.sendMessage(
                         chatId,
                         'Меню загружено! Поспеши сделать заказ на завтра до 20:00',
-                        getStartButtons(chatId)
-                    ).then(() => {
-                        clearDatabaseInNotion(ordersDatabaseId);
-                    });
+                        getStartButtons(chatId, admins)
+                    );
                 }
                 break;
         }
@@ -391,21 +406,21 @@ bot.on('message', async (msg) => {
 });
 
 async function sendMenuUploadReminder() {
-    const adminId = ADMINS.Olga;
+    const adminId = admins[0];
 
     bot.sendMessage(
         adminId,
         'Не забудь загрузить меню на следующую неделю!',
-        getUploadMenuButtons(adminId)
+        getUploadMenuButtons(adminId, admins)
     );
 }
 
 async function sendOrderReminder() {
-    for (const chatId of USERS) {
+    for (const chatId of validUsers) {
         bot.sendMessage(
             chatId,
             'Через час закроется прием заказа на обед на завтра! Если не заказывал, поспеши чтобы не остаться без обеда!',
-            getStartButtons(chatId)
+            getStartButtons(chatId, admins)
         );
     }
 }
@@ -419,5 +434,7 @@ cron.schedule(`0 ${ORDER_END_HOUR - 1} * * 1-4`, () => {
 });
 
 cron.schedule(`0 ${ORDER_END_HOUR} * * 5`, () => {
-    clearDatabaseInNotion(menuDatabaseId);
+    clearDatabaseInNotion(menuDatabaseId).then(() => {
+        clearDatabaseInNotion(ordersDatabaseId);
+    });
 });

@@ -1,15 +1,15 @@
-const { ADMINS, orderTypes, rusWeekDays, daysMap } = require('./constants');
+const { orderTypes, rusWeekDays, daysMap } = require('./constants');
 const { updateOrderInNotion } = require('./notionFunctions');
 
-const isAdmin = (userId) => {
-    return Object.values(ADMINS).includes(userId);
+const isAdmin = (userId, admins) => {
+    return admins.includes(userId);
 };
 
-const getStartButtons = (fromId) => {
+const getStartButtons = (fromId, admins) => {
     return {
         reply_markup: JSON.stringify({
             inline_keyboard: [
-                isAdmin(fromId)
+                isAdmin(fromId, admins)
                     ? [
                           {
                               text: '📝 Загрузить меню',
@@ -35,11 +35,11 @@ const getStartButtons = (fromId) => {
     };
 };
 
-const getUploadMenuButtons = (fromId) => {
+const getUploadMenuButtons = (fromId, admins) => {
     return {
         reply_markup: JSON.stringify({
             inline_keyboard: [
-                isAdmin(fromId)
+                isAdmin(fromId, admins)
                     ? [
                           {
                               text: '📝Загрузить меню',
@@ -54,11 +54,11 @@ const getUploadMenuButtons = (fromId) => {
     };
 };
 
-const getChangeDayMenuButtons = (fromId) => {
+const getChangeDayMenuButtons = (fromId, admins) => {
     return {
         reply_markup: JSON.stringify({
             inline_keyboard: [
-                isAdmin(fromId)
+                isAdmin(fromId, admins)
                     ? [
                           {
                               text: rusWeekDays[daysMap['1']],
@@ -70,7 +70,7 @@ const getChangeDayMenuButtons = (fromId) => {
                           },
                       ]
                     : [],
-                isAdmin(fromId)
+                isAdmin(fromId, admins)
                     ? [
                           {
                               text: rusWeekDays[daysMap['3']],
@@ -82,7 +82,7 @@ const getChangeDayMenuButtons = (fromId) => {
                           },
                       ]
                     : [],
-                isAdmin(fromId)
+                isAdmin(fromId, admins)
                     ? [
                           {
                               text: rusWeekDays[daysMap['5']],
@@ -102,6 +102,16 @@ const getEndOfDayButtons = () => {
     return {
         reply_markup: JSON.stringify({
             inline_keyboard: [[{ text: '↩️Назад', callback_data: 'start' }]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+        }),
+    };
+};
+
+const getNotValidUserButtons = () => {
+    return {
+        reply_markup: JSON.stringify({
+            inline_keyboard: [[{ text: '↩️Назад', callback_data: 'stop' }]],
             resize_keyboard: true,
             one_time_keyboard: true,
         }),
@@ -147,14 +157,21 @@ const getWeekDays = () => {
     };
 };
 
-const lunchOrder = async ({ orderType, databaseId, fromId, chatId, bot }) => {
+const lunchOrder = async ({
+    orderType,
+    databaseId,
+    fromId,
+    admins,
+    chatId,
+    bot,
+}) => {
     const { menuWeekDay } = getWeekDays();
 
     await updateOrderInNotion(databaseId, fromId, orderType, menuWeekDay);
     await bot.sendMessage(
         chatId,
         `Спасибо! Ты заказал ${orderType} на ${rusWeekDays[menuWeekDay]}`,
-        getStartButtons(fromId)
+        getStartButtons(fromId, admins)
     );
 };
 
@@ -165,6 +182,7 @@ module.exports = {
     getUploadMenuButtons,
     getChangeDayMenuButtons,
     getOrderButtons,
+    getNotValidUserButtons,
     getCurrentHours,
     getWeekDays,
     lunchOrder,
